@@ -1,0 +1,52 @@
+import http from 'node:http';
+import {connectDatabase} from './database.mjs';
+import {readFileSync} from 'node:fs';
+import {randomBytes,scryptSync,timingSafeEqual,createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+const prod=process.env.NODE_ENV==='production',port=Number(process.env.PORT||3000);
+const db=await connectDatabase();await db.exec('CREATE TABLE IF NOT EXISTS fitness_owner(id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL, hash TEXT NOT NULL); CREATE TABLE IF NOT EXISTS fitness_sessions(token TEXT PRIMARY KEY, expires BIGINT NOT NULL); CREATE TABLE IF NOT EXISTS fitness_records(kind TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(kind,id)); CREATE TABLE IF NOT EXISTS fitness_meta(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL); INSERT INTO fitness_meta VALUES(1,0) ON CONFLICT DO NOTHING;');
+const publicDir=fileURLToPath(new URL('./public/',import.meta.url));
+const defaults={trip:'',start:null,steps:10000,protein:180,carbs:200,fat:75};
+const initial=process.env.INITIAL_SETTINGS?JSON.parse(process.env.INITIAL_SETTINGS):defaults;
+const digest=s=>createHash('sha256').update(s).digest('hex');
+const equal=(a,b)=>{const x=Buffer.from(a||''),y=Buffer.from(b||'');return x.length===y.length&&timingSafeEqual(x,y)};
+function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));}
+function headers(res){res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');if(prod)res.setHeader('Strict-Transport-Security','max-age=31536000');}
+function file(res,name){const html=readFileSync(publicDir+name,'utf8');const scriptHashes=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>"'sha256-"+createHash('sha256').update(x[1]).digest('base64')+"'").join(' ');res.setHeader('Content-Security-Policy',`default-src 'none'; script-src ${scriptHashes||"'none'"}; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`);res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html);}
+const owner=async()=>db.prepare('SELECT * FROM fitness_owner WHERE id=1').get();
+async function session(req){const raw=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('pp_session='))?.slice(11);if(!raw)return null;return db.prepare('SELECT token FROM fitness_sessions WHERE token=? AND expires>?').get(digest(raw),Date.now());}
+function cookie(res,raw,max=604800){res.setHeader('Set-Cookie',`pp_session=${raw}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${max}${prod?'; Secure':''}`);}
+const attempts=new Map();
+function limited(req){let ip=req.socket.remoteAddress||'unknown';const now=Date.now();let a=attempts.get(ip);if(!a||a.until<now){a={count:0,until:now+900000};attempts.set(ip,a)}a.count++;for(const [k,v]of attempts)if(v.until<now)attempts.delete(k);return a.count>15;}
+async function body(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>1048576)throw Error('too_large')}return JSON.parse(text||'{}');}
+const validDate=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!isNaN(new Date(d+'T12:00:00'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+const number=(v,min,max,nullable=false)=>nullable&&v===null||typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
+function validate(kind,id,v){if(!v||typeof v!=='object'||Array.isArray(v))return false;
+if(kind==='settings')return id==='main'&&typeof v.trip==='string'&&(!v.trip||validDate(v.trip))&&number(v.start,50,800,true)&&number(v.steps,10000,50000)&&Number.isInteger(v.steps)&&number(v.protein,1,400)&&number(v.carbs,1,600)&&number(v.fat,1,200)&&Object.keys(v).every(k=>Object.keys(defaults).includes(k));
+if(!validDate(id))return false;
+if(kind==='logs')return ['steps','weight','protein','carbs','fat','sleep'].every(k=>number(v[k],0,{steps:100000,weight:800,protein:1000,carbs:1500,fat:500,sleep:24}[k],true))&&typeof v.workout==='boolean'&&typeof v.notes==='string'&&v.notes.length<=1000&&Object.keys(v).every(k=>['steps','weight','protein','carbs','fat','sleep','workout','notes'].includes(k));
+if(kind==='reviews')return v.date===id&&number(v.waist,10,100,true)&&typeof v.notes==='string'&&v.notes.length<=1500&&Object.keys(v).every(k=>['date','waist','notes'].includes(k));return false;}
+async function snapshot(){const state={settings:{...defaults},logs:{},reviews:{}},revisions={settings:{},logs:{},reviews:{}};for(const row of await db.prepare('SELECT * FROM fitness_records').all()){if(row.kind==='settings')state.settings=JSON.parse(row.value);else state[row.kind][row.id]=JSON.parse(row.value);revisions[row.kind][row.id]=row.revision;}return {state,revisions,profileNote:process.env.PROFILE_NOTE||'',version:(await db.prepare('SELECT version FROM fitness_meta').get()).version};}
+async function bump(){await db.prepare('UPDATE fitness_meta SET version=version+1').run();}
+async function put(kind,id,value,revision){await db.prepare('INSERT INTO fitness_records VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET value=excluded.value,revision=excluded.revision').run(kind,id,JSON.stringify(value),revision);}
+let queue=Promise.resolve();const server=http.createServer((req,res)=>{const work=async()=>{headers(res);try{
+const url=new URL(req.url,'http://localhost'),path=url.pathname;
+if(req.method==='GET'&&path==='/healthz')return send(res,200,{ok:true});
+if(!['GET','HEAD'].includes(req.method)){const origin=req.headers.origin;const expected=process.env.APP_ORIGIN||(prod?null:`http://${req.headers.host}`);if(!expected||origin!==expected)return send(res,403,{error:'origin_rejected'});}
+if(req.method==='GET'&&path==='/api/session')return send(res,200,{authenticated:!!(await session(req)),setup:!(await owner())});
+if(req.method==='POST'&&(path==='/api/login'||path==='/api/setup')){if(limited(req))return send(res,429,{error:'Too many attempts. Try again in 15 minutes.'});const b=await body(req);if(typeof b.password!=='string'||b.password.length>256)return send(res,400,{error:'Invalid password.'});if(path==='/api/setup'){
+if(await owner())return send(res,409,{error:'Already configured.'});if(!process.env.SETUP_TOKEN||!equal(b.token,process.env.SETUP_TOKEN))return send(res,403,{error:'Invalid setup code.'});if(b.password.length<14)return send(res,400,{error:'Use a password or passphrase of at least 14 characters.'});if(!validate('settings','main',{...defaults,...initial}))return send(res,500,{error:'Initial settings need correction.'});const salt=randomBytes(16).toString('hex'),hash=scryptSync(b.password,salt,64).toString('hex');await db.exec('BEGIN');try{await db.prepare('INSERT INTO fitness_owner VALUES(1,?,?)').run(salt,hash);await put('settings','main',{...defaults,...initial},1);await bump();await db.exec('COMMIT')}catch(e){await db.exec('ROLLBACK');throw e}
+}else{const o=await owner();const h=scryptSync(b.password,o?.salt||'dummy-salt',64).toString('hex');if(!o||!equal(h,o.hash))return send(res,401,{error:'Password not recognized.'});}
+const raw=randomBytes(32).toString('hex');await db.prepare('DELETE FROM fitness_sessions WHERE expires<?').run(Date.now());await db.prepare('INSERT INTO fitness_sessions VALUES(?,?)').run(digest(raw),Date.now()+604800000);cookie(res,raw);return send(res,200,{ok:true});}
+const authed=await session(req);
+if(req.method==='GET'&&(path==='/'||path==='/dashboard'))return file(res,authed?'dashboard.html':'login.html');
+if(!authed)return send(res,401,{error:'Sign in required.'});
+if(req.method==='POST'&&path==='/api/logout'){await db.prepare('DELETE FROM fitness_sessions WHERE token=?').run(authed.token);cookie(res,'',0);return send(res,200,{ok:true});}
+if(req.method==='GET'&&path==='/api/state')return send(res,200,await snapshot());
+const match=path.match(/^\/api\/(settings|logs|reviews)\/([^/]+)$/);
+if(req.method==='PUT'&&match){const [,kind,id]=match,b=await body(req);if(!validate(kind,id,b.value)||!Number.isInteger(b.revision)||b.revision<0)return send(res,400,{error:'Invalid record.'});const old=await db.prepare('SELECT revision FROM fitness_records WHERE kind=? AND id=?').get(kind,id);if((old?.revision||0)!==b.revision)return send(res,409,{error:'This record changed on another device. Refresh before saving.'});await put(kind,id,b.value,b.revision+1);await bump();return send(res,200,{revision:b.revision+1,version:(await snapshot()).version});}
+if(req.method==='POST'&&path==='/api/import'){const b=await body(req),x=b.state;if(!x||!validate('settings','main',x.settings)||!x.logs||Array.isArray(x.logs)||!x.reviews||Array.isArray(x.reviews)||Object.keys(x.logs).length>10000||Object.keys(x.reviews).length>2000||!Object.entries(x.logs).every(([k,v])=>validate('logs',k,v))||!Object.entries(x.reviews).every(([k,v])=>validate('reviews',k,v)))return send(res,400,{error:'Invalid backup.'});if(b.version!==(await snapshot()).version)return send(res,409,{error:'Cloud data changed. Refresh before importing.'});await db.exec('BEGIN');try{await put('settings','main',x.settings,((await snapshot()).revisions.settings.main||0)+1);for(const kind of ['logs','reviews']){const old=(await snapshot()).revisions[kind];for(const [id,value] of Object.entries(x[kind]))await put(kind,id,value,(old[id]||0)+1);}await bump();await db.exec('COMMIT')}catch(e){await db.exec('ROLLBACK');throw e}return send(res,200,await snapshot());}
+return send(res,404,{error:'Not found.'});
+}catch(e){if(e.message==='too_large')send(res,413,{error:'Backup exceeds 1 MB.'});else if(e instanceof SyntaxError)send(res,400,{error:'Invalid JSON.'});else{console.error('Request failed:',e.name);send(res,500,{error:'Unable to complete request.'});}}};queue=queue.then(work,work);});
+server.listen(port,'0.0.0.0',()=>console.log(`Fitness dashboard listening on ${port}`));
+process.on('SIGTERM',()=>server.close(async()=>{await db.close();process.exit(0)}));
