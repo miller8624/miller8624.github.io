@@ -18,10 +18,12 @@ Database tables `owner`, `sessions`, `records`, `meta` are created at startup. K
 
 Requires Node 24+. `npm ci`, then set `SETUP_TOKEN` and run `npm start`. In local development only, SQLite is used if DATABASE_URL is absent. No local database is committed. `npm test` runs isolation/authentication, two-session sync, stale edits, imports, logout, validation and persistence across server restart. Production refuses to start without Postgres.
 
-No Apple Health, Strong, Fitness+ or YMCA integration is claimed. Logging remains manual. No photo-upload feature exists.
+No Apple Health, Strong, Fitness+ or YMCA integration is claimed. Logging remains manual. Private photo uploads are available after sign-in.
 
-## Private photos and steps ingress
+## Private photos and goal tracking
 
-Authenticated photo uploads are normalized to JPEG, resized, stripped of metadata and stored in `fitness_photos`. Photos are not included in JSON backups. Download originals to keep an independent photo backup. A step-only bearer token created in Settings permits POST `/api/steps-sync` with `{ "date": "YYYY-MM-DD", "steps": 10000 }`; it cannot read records or photos. Tokens are hashed server-side and rotating the connection invalidates the old token. Supply daily totals, not additive samples. The iPhone Shortcut/exporter must avoid duplicate Watch/iPhone samples and use the user's local calendar date. Background delivery is not guaranteed by this web app.
+Authenticated photo uploads are normalized to JPEG, resized, stripped of metadata and stored in `fitness_photos`. Photos are not included in JSON backups. Keep your originals as an independent backup. Side-by-side and reveal-slider comparisons preserve the complete image frame on mobile.
 
-Progress-review suggestions are deterministic, require at least three weight readings in each of two weeks, and never alter settings automatically. They are guidance, not diagnoses or an automated calorie prescription.
+Optional settings `goalWeight` and `goalStart` define a linear planning path ending on `trip`. Recorded weights and rolling seven-day averages are shown against this guide. Existing settings and older backups remain compatible. No target is chosen automatically.
+
+Apple Health export routes are disabled with HTTP 410. Previously issued tokens can no longer write any steps. All activity logging is manual.
