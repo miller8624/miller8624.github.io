@@ -19,6 +19,7 @@ assert.equal((await request('/api/photos',{method:'POST',cookie:cookieA,body:{da
 let tokenResponse=await request('/api/integrations/steps',{method:'POST',cookie:cookieA,body:{}});const {token}=await tokenResponse.json();
 const sync=await fetch(origin+'/api/steps-sync',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({date:'2026-10-08',steps:9500})});assert.equal(sync.status,200);
 assert.equal((await(await request('/api/state',{cookie:cookieB})).json()).state.logs['2026-10-08'].steps,9500);
+const exportBody={data:{metrics:[{name:'step_count',units:'count',data:[{date:'2026-10-07 00:00:00 -0400',qty:9000}]}]}};const exported=await fetch(origin+'/api/steps-sync',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(exportBody)});assert.equal(exported.status,200);exportBody.data.metrics[0].data.push({date:'2026-10-07 01:00:00 -0400',qty:1000});assert.equal((await fetch(origin+'/api/steps-sync',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(exportBody)})).status,400);
 assert.equal((await fetch(origin+'/api/photos',{headers:{Authorization:'Bearer '+token}})).status,401);
 assert.equal((await(await request('/api/photos',{cookie:cookieB})).json()).photos.length,1);
 const value={steps:10000,weight:200,protein:180,carbs:200,fat:75,sleep:7,workout:true,notes:'Test entry'};
