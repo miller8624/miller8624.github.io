@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import {test} from 'node:test';import assert from 'node:assert/strict';import {spawn} from 'node:child_process';import {mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 test('private account, two-device sync, conflicts, import, logout and restart persistence',async()=>{const dir=mkdtempSync(join(tmpdir(),'playa-test-'));const port=18376,origin=`http://127.0.0.1:${port}`;let child;
 async function start(){child=spawn(process.execPath,['server.mjs'],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:String(port),DATA_DIR:dir,SETUP_TOKEN:'test-setup-secret',NODE_ENV:'test',APP_ORIGIN:origin},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{child.stdout.on('data',resolve);child.on('exit',c=>reject(Error('Server exited '+c)));child.on('error',reject)})}
@@ -10,6 +11,16 @@ r=await request('/api/setup',{method:'POST',body:{token:'test-setup-secret',pass
 assert.equal((await request('/api/setup',{method:'POST',body:{token:'test-setup-secret',password:'a-long-test-password'}})).status,409);
 assert.equal((await request('/api/login',{method:'POST',body:{password:'incorrect'}})).status,401);
 r=await request('/api/login',{method:'POST',body:{password:'a-long-test-password'}});const cookieB=r.headers.get('set-cookie').split(';')[0];assert.notEqual(cookieA,cookieB);
+const image=await sharp({create:{width:8,height:8,channels:3,background:'#ffffff'}}).jpeg().toBuffer();
+assert.equal((await request('/api/photos',{method:'POST',body:{date:'2026-10-09',caption:'test',image:image.toString('base64')}})).status,401);
+let uploaded=await request('/api/photos',{method:'POST',cookie:cookieA,body:{date:'2026-10-09',caption:'Test photo',image:image.toString('base64')}});assert.equal(uploaded.status,201);const photo=await uploaded.json();
+assert.equal((await request('/api/photos/'+photo.id)).status,401);let photoResponse=await request('/api/photos/'+photo.id,{cookie:cookieB});assert.equal(photoResponse.status,200);assert.equal(photoResponse.headers.get('cache-control'),'no-store');assert.equal((await sharp(Buffer.from(await photoResponse.arrayBuffer())).metadata()).exif,undefined);
+assert.equal((await request('/api/photos',{method:'POST',cookie:cookieA,body:{date:'2026-10-09',caption:'bad',image:Buffer.from('not an image').toString('base64')}})).status,400);
+let tokenResponse=await request('/api/integrations/steps',{method:'POST',cookie:cookieA,body:{}});const {token}=await tokenResponse.json();
+const sync=await fetch(origin+'/api/steps-sync',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({date:'2026-10-08',steps:9500})});assert.equal(sync.status,200);
+assert.equal((await(await request('/api/state',{cookie:cookieB})).json()).state.logs['2026-10-08'].steps,9500);
+assert.equal((await fetch(origin+'/api/photos',{headers:{Authorization:'Bearer '+token}})).status,401);
+assert.equal((await(await request('/api/photos',{cookie:cookieB})).json()).photos.length,1);
 const value={steps:10000,weight:200,protein:180,carbs:200,fat:75,sleep:7,workout:true,notes:'Test entry'};
 assert.equal((await request('/api/logs/2026-10-09',{method:'PUT',cookie:cookieA,originHeader:'https://evil.example',body:{value,revision:0}})).status,403);
 assert.equal((await request('/api/logs/2026-02-31',{method:'PUT',cookie:cookieA,body:{value,revision:0}})).status,400);
