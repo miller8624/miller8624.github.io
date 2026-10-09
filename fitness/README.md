@@ -27,3 +27,11 @@ Authenticated photo uploads are normalized to JPEG, resized, stripped of metadat
 Optional settings `goalWeight` and `goalStart` define a linear planning path ending on `trip`. Recorded weights and rolling seven-day averages are shown against this guide. Existing settings and older backups remain compatible. No target is chosen automatically.
 
 Apple Health export routes are disabled with HTTP 410. Previously issued tokens can no longer write any steps. All activity logging is manual.
+
+## Daily workouts, food inspiration and rewards
+
+Today shows the complete planned session before its check-in. Exercise dialogs include original setup cues and schematic animated SVG sketches, with alternative movements selectable individually. Sketches are not biomechanics demonstrations; ACE/NASM demo libraries provide external examples. No third-party exercise images are bundled. Animation respects reduced-motion preferences and can be paused.
+
+Nutrition rotates 14 meal/snack ideas by calendar date, with a manual shuffle. Macros are approximate; MyFitnessPal remains a separate manual diary.
+
+Rewards are derived from meaningful dated cloud check-ins (10 points), walking-goal days (20), and planned activities (30). Duplicate saves cannot duplicate points. Current and best check-in streaks, walking streaks, six badges, a seven-day trail and 200-point levels are recalculated from records. Confetti fires only after a confirmed save that newly achieves today's check-in/step/activity goal, with an in-session off switch and reduced-motion support. No extra workout is required on a recovery day.
