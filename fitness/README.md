@@ -39,3 +39,7 @@ Rewards are derived from meaningful dated cloud check-ins (10 points), walking-g
 ## Pushup progression
 
 The challenge defaults to 20 daily pushups starting October 11, 2026. `pushupStart` and `pushupBase` are adjustable settings. Each dated log can store optional boolean `pushups`; older records/backups remain valid. A day's target equals the initial target plus completed challenge dates strictly before that day. Gaps do not advance it, a same-day save cannot advance it, and future completions cannot be submitted through the record API. Completion counts as a meaningful check-in and triggers the existing celebration. Daily totals can be split into manageable sets.
+
+## Outstanding-task reminders
+
+Today displays independent reminders for planned activity, a saved daily step total, pushup completion and Sunday weekly review, plus optional morning weight. A saved weight alone never clears the other tasks. Zero is a valid saved step total; reaching the step goal is handled separately by rewards. Completed items remain available in a collapsed list. Missing Sunday reviews from the last four weeks, starting at the challenge start, link to the correctly dated review form. Reminders are in-app only; no notifications or background messages are sent.
