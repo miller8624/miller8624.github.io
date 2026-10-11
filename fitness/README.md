@@ -35,3 +35,7 @@ Today shows the complete planned session before its check-in. Exercise dialogs i
 Nutrition rotates 14 meal/snack ideas by calendar date, with a manual shuffle. Macros are approximate; MyFitnessPal remains a separate manual diary.
 
 Rewards are derived from meaningful dated cloud check-ins (10 points), walking-goal days (20), and planned activities (30). Duplicate saves cannot duplicate points. Current and best check-in streaks, walking streaks, six badges, a seven-day trail and 200-point levels are recalculated from records. Confetti fires only after a confirmed save that newly achieves today's check-in/step/activity goal, with an in-session off switch and reduced-motion support. No extra workout is required on a recovery day.
+
+## Pushup progression
+
+The challenge defaults to 20 daily pushups starting October 11, 2026. `pushupStart` and `pushupBase` are adjustable settings. Each dated log can store optional boolean `pushups`; older records/backups remain valid. A day's target equals the initial target plus completed challenge dates strictly before that day. Gaps do not advance it, a same-day save cannot advance it, and future completions cannot be submitted through the record API. Completion counts as a meaningful check-in and triggers the existing celebration. Daily totals can be split into manageable sets.
