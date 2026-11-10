@@ -43,3 +43,13 @@ The challenge defaults to 20 daily pushups starting October 11, 2026. `pushupSta
 ## Outstanding-task reminders
 
 Today displays independent reminders for planned activity, a saved daily step total, pushup completion and Sunday weekly review, plus optional morning weight. A saved weight alone never clears the other tasks. Zero is a valid saved step total; reaching the step goal is handled separately by rewards. Completed items remain available in a collapsed list. Missing Sunday reviews from the last four weeks, starting at the challenge start, link to the correctly dated review form. Reminders are in-app only; no notifications or background messages are sent.
+
+## November activity refresh
+
+Daily nutrient intake, calorie calculations, sleep and daily journal inputs have been retired from the UI. Legacy fields and existing records remain compatible and are preserved on record updates; no pushup settings or completions are migrated/reset. Food inspiration remains without macro estimates.
+
+New dated logs support `activityType` (steps/home/fitness/gym/rest), `gymPlan` (full/accessories/upper/lower), and `squats`. Activity choices save with the daily record; only completed gym records affect subsequent suggestions. Two full intervening calendar days reset the recommendation to full body. The immediate follow-up to full body is light accessory work with recovery guidance, then lower/upper emphasis. Completed sessions retain their selected routine; uncompleted plans refresh against history. Changing activity type clears the draft activity-complete checkbox.
+
+Air squats start at 36 on 2026-11-10; each prior completed squat date adds one to the next dated target. Pushups use their unchanged independent history. Squat completion triggers celebrations and counts as a check-in.
+
+Weekly coaching selects one weight per Monday–Sunday week, favoring Monday (otherwise the first recorded reading), compares successive weights by elapsed days, and compares the latest dated measurement with the goal path. Missing step totals are unknown; adherence is reported only among logged totals. Monday weigh-in reminders replace daily weight reminders. The home headline rotates across fourteen messages and five accessible color palettes by local calendar date.
