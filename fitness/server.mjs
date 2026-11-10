@@ -34,7 +34,7 @@ async function bump(){await db.prepare('UPDATE fitness_meta SET version=version+
 async function put(kind,id,value,revision){await db.prepare('INSERT INTO fitness_records VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET value=excluded.value,revision=excluded.revision').run(kind,id,JSON.stringify(value),revision);}
 let queue=Promise.resolve();const server=http.createServer((req,res)=>{const work=async()=>{headers(res);try{
 const url=new URL(req.url,'http://localhost'),path=url.pathname;
-if(req.method==='GET'&&path==='/healthz')return send(res,200,{ok:true});
+if(req.method==='GET'&&path==='/healthz')return send(res,200,{ok:true,release:'adaptive-activity-v1'});
 if(path==='/api/steps-sync'||path==='/api/integrations/steps')return send(res,410,{error:'Steps integration has been removed. Log steps manually.'});
 if(!['GET','HEAD'].includes(req.method)){const origin=req.headers.origin;const expected=process.env.APP_ORIGIN||(prod?null:`http://${req.headers.host}`);if(!expected||origin!==expected)return send(res,403,{error:'origin_rejected'});}
 if(req.method==='GET'&&path==='/api/session')return send(res,200,{authenticated:!!(await session(req)),setup:!(await owner())});
